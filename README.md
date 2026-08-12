@@ -1,8 +1,8 @@
 # Immersive ButtonTray
 
-**A tidy launcher dock for vanilla WoW 1.12 — sweep your addon minimap buttons into one clean tray, and add your own buttons that run any command.**
+**A minimalist minimap button tray for vanilla WoW 1.12 — store your addon minimap buttons in one foldable menu, and add your own custom buttons.**
 
-Minimap buttons pile up and clutter the edge of the map (especially with a square minimap). Immersive ButtonTray collects them all into one simple, text-based menu that stays out of the way and fades when you don't need it — and lets you add your own buttons for the commands you actually use.
+Minimap buttons pile up and clutter the edge of the map (especially with a square minimap). Immersive ButtonTray tidies them all into one simple, text-based menu that stays out of the way and fades when you don't need it — and lets you add your own buttons for the commands you actually use.
 
 ![Immersive ButtonTray](tray1.png)
 

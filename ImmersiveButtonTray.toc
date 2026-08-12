@@ -1,6 +1,6 @@
 ## Interface: 11200
 ## Title: Immersive ButtonTray
-## Notes: A minimalist launcher dock - collect your addon minimap buttons and add your own command buttons. Type /ibt to set up.
+## Notes: A minimalist minimap button tray - store your addon minimap buttons in one foldable menu, and add your own custom buttons. Type /ibt to set up.
 ## Author: Ronniel
 ## Version: 0.1.0
 ## DefaultState: Enabled
