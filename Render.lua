@@ -95,6 +95,21 @@ local function ForceAlpha0() this:SetAlpha(0) end
 function IBT.AttachMinimap(b, e)
     local real = getglobal(e.id)
     if not real then return end
+    -- cache the addon's own state ONCE (before we override it) so we can put it
+    -- back if the button is later returned to the minimap
+    if not b._mmSaved then
+        b._mmSaved = {
+            enter = real:GetScript("OnEnter"),
+            leave = real:GetScript("OnLeave"),
+            dragStart = real:GetScript("OnDragStart"),
+            dragStop = real:GetScript("OnDragStop"),
+            update = real:GetScript("OnUpdate"),
+            show = real:GetScript("OnShow"),
+            movable = (real.IsMovable and real:IsMovable()) or false,
+            point = { real:GetPoint() },
+            parent = real:GetParent(),
+        }
+    end
     b.mmReal = real
     real:SetScript("OnDragStart", nil)
     real:SetScript("OnDragStop", nil)
@@ -116,11 +131,29 @@ end
 function IBT.RestoreMinimapButton(id)
     local real = getglobal(id)
     if not real then return end
-    real:SetScript("OnShow", nil) -- allow it to be visible on the minimap again
-    real:SetParent(Minimap)
+    local b = IBT.buttons and IBT.buttons[id]
+    local s = b and b._mmSaved
+    real:SetScript("OnShow", s and s.show or nil) -- restore the addon's own OnShow (or clear our guard)
+    if s then
+        real:SetScript("OnEnter", s.enter)
+        real:SetScript("OnLeave", s.leave)
+        real:SetScript("OnDragStart", s.dragStart)
+        real:SetScript("OnDragStop", s.dragStop)
+        real:SetScript("OnUpdate", s.update)
+        if real.SetMovable then real:SetMovable(s.movable) end
+    end
+    real:SetParent((s and s.parent) or Minimap)
     real:ClearAllPoints()
     real:SetAlpha(1)
-    real:SetPoint("CENTER", Minimap, "CENTER", 0, 0)
+    if s and s.point and s.point[1] then
+        real:SetPoint(s.point[1], s.point[2] or Minimap, s.point[3] or "CENTER", s.point[4] or 0, s.point[5] or 0)
+    else
+        real:SetPoint("CENTER", Minimap, "CENTER", 0, 0)
+    end
+    real:Show()
+    -- drop our cached refs so the rebuild hide-loop won't re-hide it, and a later
+    -- re-collect starts fresh
+    if b then b.mmReal = nil; b._mmSaved = nil end
 end
 
 function IBT.ReapplyMinimap()

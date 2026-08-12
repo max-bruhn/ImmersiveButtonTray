@@ -27,8 +27,6 @@ local function Hovering()
     return false
 end
 
-function IBT.ApplyFade() end
-
 function IBT.StartFadeTicker()
     if started then return end
     started = true
