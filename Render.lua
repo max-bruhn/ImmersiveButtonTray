@@ -392,7 +392,7 @@ function IBT.Rebuild()
     local i
     for i = 1, table.getn(hot) do
         local e = hot[i]
-        if not e.hidden then
+        if IBT.Renderable(e) then
             local btn = IBT.GetButton(e.id)
             IBT.ConfigureButton(btn, e)
             btn:SetParent(IBT.body)
@@ -401,7 +401,7 @@ function IBT.Rebuild()
     end
     for i = 1, table.getn(tray) do
         local e = tray[i]
-        if not e.hidden then
+        if IBT.Renderable(e) then
             local btn = IBT.GetButton(e.id)
             IBT.ConfigureButton(btn, e)
             btn:SetParent(IBT.body)
@@ -411,4 +411,25 @@ function IBT.Rebuild()
 
     IBT.ApplyToggleSkin()
     IBT.Relayout()
+end
+
+-- a minimap entry only renders if its addon frame is actually present on this
+-- character (so profiles copied from a character with different addons don't
+-- leave dead, non-functional buttons in the tray). It stays in the list so the
+-- user can delete it, and appears automatically if the addon loads later.
+function IBT.Renderable(e)
+    if e.hidden then return false end
+    if e.kind == "minimap" and not getglobal(e.id) then return false end
+    return true
+end
+
+-- how many collected minimap buttons are currently present (drives re-render
+-- when an addon loads late)
+function IBT.PresentMinimapCount()
+    local list, c, i = ImmersiveButtonTrayDB.entries, 0, nil
+    for i = 1, table.getn(list) do
+        local e = list[i]
+        if e.kind == "minimap" and not e.hidden and getglobal(e.id) then c = c + 1 end
+    end
+    return c
 end

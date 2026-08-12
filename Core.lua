@@ -10,6 +10,7 @@
 
 IBT = IBT or {}
 ImmersiveButtonTrayDB = ImmersiveButtonTrayDB or {}
+ImmersiveButtonTrayProfilesDB = ImmersiveButtonTrayProfilesDB or {}
 
 local DEFAULTS = {
     style        = "modern",   -- modern | classic
@@ -223,6 +224,104 @@ function IBT.ToggleHidden(id)
 end
 
 -- ---------------------------------------------------------------------------
+-- profiles (account-wide library: per-character snapshots + saved presets)
+-- The live per-character settings stay in ImmersiveButtonTrayDB; profiles are
+-- copied to/from ImmersiveButtonTrayProfilesDB. Loading copies INTO the same
+-- live table so captured references stay valid.
+-- ---------------------------------------------------------------------------
+function IBT.DeepCopy(t)
+    if type(t) ~= "table" then return t end
+    local c, k, v = {}, nil, nil
+    for k, v in pairs(t) do c[k] = IBT.DeepCopy(v) end
+    return c
+end
+
+function IBT.InitProfiles()
+    local p = ImmersiveButtonTrayProfilesDB
+    if p.chars == nil then p.chars = {} end
+    if p.saved == nil then p.saved = {} end
+end
+
+function IBT.CharKey()
+    local n = UnitName("player") or "?"
+    local r = (GetRealmName and GetRealmName()) or ""
+    if r and r ~= "" then return n .. " - " .. r end
+    return n
+end
+
+-- snapshot the current character's live settings into the account-wide library
+function IBT.SnapshotChar()
+    IBT.InitProfiles()
+    ImmersiveButtonTrayProfilesDB.chars[IBT.CharKey()] = IBT.DeepCopy(ImmersiveButtonTrayDB)
+end
+
+-- returns a display-ordered array: { {name=, isChar=, current=} } (chars first)
+function IBT.ProfileList()
+    IBT.InitProfiles()
+    local out, ck, name = {}, IBT.CharKey(), nil
+    for name in pairs(ImmersiveButtonTrayProfilesDB.chars) do
+        table.insert(out, { name = name, isChar = true, current = (name == ck) })
+    end
+    for name in pairs(ImmersiveButtonTrayProfilesDB.saved) do
+        table.insert(out, { name = name, isChar = false })
+    end
+    local function before(a, b)
+        local ac, bc = (a.isChar and 0 or 1), (b.isChar and 0 or 1)
+        if ac ~= bc then return ac < bc end
+        return string.lower(a.name) < string.lower(b.name)
+    end
+    local i
+    for i = 2, table.getn(out) do
+        local cur, j = out[i], i - 1
+        while j >= 1 and before(cur, out[j]) do out[j + 1] = out[j]; j = j - 1 end
+        out[j + 1] = cur
+    end
+    return out
+end
+
+local function ProfileSource(name, isChar)
+    IBT.InitProfiles()
+    if isChar then return ImmersiveButtonTrayProfilesDB.chars[name] end
+    return ImmersiveButtonTrayProfilesDB.saved[name]
+end
+
+-- replace the live settings with a profile (keeps the table identity)
+function IBT.LoadProfile(name, isChar)
+    local src = ProfileSource(name, isChar)
+    if not src then return end
+    local db, k = ImmersiveButtonTrayDB, nil
+    for k in pairs(db) do db[k] = nil end
+    for k in pairs(src) do db[k] = IBT.DeepCopy(src[k]) end
+    IBT.InitDefaults()
+    IBT.SyncMinimapEntries()
+    if IBT.Rebuild then IBT.Rebuild() end
+end
+
+function IBT.SaveProfileAs(name)
+    name = IBT.Trim(name or "")
+    if name == "" then return end
+    IBT.InitProfiles()
+    ImmersiveButtonTrayProfilesDB.saved[name] = IBT.DeepCopy(ImmersiveButtonTrayDB)
+end
+
+function IBT.DuplicateProfile(name, isChar, newname)
+    newname = IBT.Trim(newname or "")
+    if newname == "" then return end
+    local src = ProfileSource(name, isChar)
+    if not src then return end
+    ImmersiveButtonTrayProfilesDB.saved[newname] = IBT.DeepCopy(src)
+end
+
+function IBT.DeleteProfile(name, isChar)
+    IBT.InitProfiles()
+    if isChar then
+        ImmersiveButtonTrayProfilesDB.chars[name] = nil
+    else
+        ImmersiveButtonTrayProfilesDB.saved[name] = nil
+    end
+end
+
+-- ---------------------------------------------------------------------------
 -- minimap scanner (adapted from pfUI addonbuttons, MIT)
 -- ---------------------------------------------------------------------------
 local IGNORED = {
@@ -327,14 +426,21 @@ function IBT.BuildAll()
     if IBT.BuildOptions then IBT.BuildOptions() end
     IBT.SyncMinimapEntries()
     if IBT.Rebuild then IBT.Rebuild() end
+    if IBT.PresentMinimapCount then IBT._lastPresent = IBT.PresentMinimapCount() end
     if IBT.ApplyLock then IBT.ApplyLock() end
+    IBT.InitProfiles()
+    IBT.SnapshotChar() -- publish this character's setup so alts can copy it
 end
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("VARIABLES_LOADED")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
+events:RegisterEvent("PLAYER_LOGOUT")
 events:SetScript("OnEvent", function()
-    if event == "VARIABLES_LOADED" then
+    if event == "PLAYER_LOGOUT" then
+        if IBT.built then IBT.SnapshotChar() end -- save latest setup for other characters
+        return
+    elseif event == "VARIABLES_LOADED" then
         IBT.InitDefaults()
     elseif event == "PLAYER_ENTERING_WORLD" then
         IBT.InitDefaults()
@@ -352,7 +458,9 @@ events:SetScript("OnEvent", function()
             rescan = 0
             local before = table.getn(ImmersiveButtonTrayDB.entries)
             IBT.SyncMinimapEntries()
-            if table.getn(ImmersiveButtonTrayDB.entries) ~= before and IBT.Rebuild then
+            local present = IBT.PresentMinimapCount and IBT.PresentMinimapCount() or 0
+            if (table.getn(ImmersiveButtonTrayDB.entries) ~= before or present ~= (IBT._lastPresent or -1)) and IBT.Rebuild then
+                IBT._lastPresent = present
                 IBT.Rebuild()
             elseif IBT.ReapplyMinimap then
                 IBT.ReapplyMinimap()

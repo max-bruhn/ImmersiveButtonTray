@@ -2,8 +2,9 @@
 ## Title: Immersive ButtonTray
 ## Notes: A minimalist minimap button tray - store your addon minimap buttons in one foldable menu, and add your own custom buttons. Type /ibt to set up.
 ## Author: Ronniel
-## Version: 0.1.0
+## Version: 0.2.0
 ## DefaultState: Enabled
+## SavedVariables: ImmersiveButtonTrayProfilesDB
 ## SavedVariablesPerCharacter: ImmersiveButtonTrayDB
 ## X-Credits: Minimap-button collection logic adapted from pfUI (MIT, (c) 2016-2021 Shagu).
 Core.lua

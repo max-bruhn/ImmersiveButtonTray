@@ -16,6 +16,7 @@ Minimap buttons pile up and clutter the edge of the map (especially with a squar
 - **Fades when idle** — the whole dock quietly fades out after a few seconds, and comes back when your mouse is near. Keeps your screen clean and the world in focus.
 - **Your layout** — grow up or down, set the width, spacing, columns, opacity, and alignment.
 - **Modern or Classic theme.**
+- **Profiles** — save your setup and load it on your other characters. Each character's setup is saved automatically, so a new alt can copy your main's tray in one click.
 
 ![Tray Setup](tray2.png)
 
@@ -33,6 +34,7 @@ If you used the green **Code → Download ZIP** button, rename the unpacked `Imm
 - **Left-click the handle** to open or close the Tray. **Drag it** to move the whole dock (unlock first with `/ibt unlock`).
 - In **Tray Setup**, put each button in the **Tray** or **Hotlinks**, rename it, reorder it, or add your own command button.
 - In **Look & Feel**, set the theme, layout, and how the dock fades.
+- In **Profiles**, save your setup as a named profile, or **Load** another character's setup onto the current one (each character's setup is saved automatically).
 
 ## Credits & license
 

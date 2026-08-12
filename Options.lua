@@ -145,6 +145,47 @@ StaticPopupDialogs["IBT_COMMAND"] = {
     timeout = 0, whileDead = 1, hideOnEscape = 1,
 }
 
+-- profiles: save-as, duplicate, load-confirm
+StaticPopupDialogs["IBT_SAVEPROFILE"] = {
+    text = "Save your current settings as a profile named:",
+    button1 = "Save", button2 = "Cancel", hasEditBox = 1, maxLetters = 32,
+    OnAccept = function()
+        IBT.SaveProfileAs(getglobal(this:GetParent():GetName() .. "EditBox"):GetText())
+        if IBT.RefreshProfiles then IBT.RefreshProfiles() end
+    end,
+    EditBoxOnEnterPressed = function()
+        IBT.SaveProfileAs(getglobal(this:GetParent():GetName() .. "EditBox"):GetText())
+        this:GetParent():Hide()
+        if IBT.RefreshProfiles then IBT.RefreshProfiles() end
+    end,
+    timeout = 0, whileDead = 1, hideOnEscape = 1,
+}
+
+StaticPopupDialogs["IBT_DUPPROFILE"] = {
+    text = "Copy this profile to a new profile named:",
+    button1 = "Copy", button2 = "Cancel", hasEditBox = 1, maxLetters = 32,
+    OnAccept = function()
+        IBT.DuplicateProfile(IBT._profName, IBT._profIsChar, getglobal(this:GetParent():GetName() .. "EditBox"):GetText())
+        if IBT.RefreshProfiles then IBT.RefreshProfiles() end
+    end,
+    EditBoxOnEnterPressed = function()
+        IBT.DuplicateProfile(IBT._profName, IBT._profIsChar, getglobal(this:GetParent():GetName() .. "EditBox"):GetText())
+        this:GetParent():Hide()
+        if IBT.RefreshProfiles then IBT.RefreshProfiles() end
+    end,
+    timeout = 0, whileDead = 1, hideOnEscape = 1,
+}
+
+StaticPopupDialogs["IBT_LOADPROFILE"] = {
+    text = "Replace your current settings with profile \"%s\"?",
+    button1 = "Load", button2 = "Cancel",
+    OnAccept = function()
+        IBT.LoadProfile(IBT._profName, IBT._profIsChar)
+        ReloadUI()
+    end,
+    timeout = 0, whileDead = 1, hideOnEscape = 1,
+}
+
 -- ---------------------------------------------------------------------------
 -- entry list rows
 -- ---------------------------------------------------------------------------
@@ -224,15 +265,77 @@ function IBT.RefreshList()
 end
 
 -- ---------------------------------------------------------------------------
+-- profile list rows
+-- ---------------------------------------------------------------------------
+local PROWS, PROW_H = 9, 26
+
+local function MakeProfRow(parent, index)
+    local r = CreateFrame("Frame", nil, parent)
+    r:SetWidth(360); r:SetHeight(PROW_H - 4)
+    r:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -(index - 1) * PROW_H)
+
+    r.nameFS = r:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    r.nameFS:SetPoint("LEFT", r, "LEFT", 4, 0)
+    r.nameFS:SetWidth(160); r.nameFS:SetJustifyH("LEFT")
+
+    r.del = Btn(r, 52, 18, "Delete", function()
+        IBT.DeleteProfile(r.pname, r.pIsChar); IBT.RefreshProfiles()
+    end)
+    r.del:SetPoint("RIGHT", r, "RIGHT", 0, 0)
+    r.copy = Btn(r, 52, 18, "Copy", function()
+        IBT._profName = r.pname; IBT._profIsChar = r.pIsChar; StaticPopup_Show("IBT_DUPPROFILE")
+    end)
+    r.copy:SetPoint("RIGHT", r.del, "LEFT", -6, 0)
+    r.load = Btn(r, 52, 18, "Load", function()
+        IBT._profName = r.pname; IBT._profIsChar = r.pIsChar; StaticPopup_Show("IBT_LOADPROFILE", r.pname)
+    end)
+    r.load:SetPoint("RIGHT", r.copy, "LEFT", -6, 0)
+    return r
+end
+
+local function FillProfRow(r, item)
+    r.pname = item.name
+    r.pIsChar = item.isChar
+    if item.isChar then
+        local tag = item.current and "  |cff888888(this character)|r" or ""
+        r.nameFS:SetText("|cffffd200" .. item.name .. "|r" .. tag)
+    else
+        r.nameFS:SetText("|cffffffff" .. item.name .. "|r")
+    end
+    -- don't offer to delete the character you're currently on (it re-saves on logout)
+    if item.current then r.del:Hide() else r.del:Show() end
+end
+
+function IBT.RefreshProfiles()
+    if not IBT.profScroll then return end
+    local list = IBT.ProfileList()
+    local n = table.getn(list)
+    FauxScrollFrame_Update(IBT.profScroll, n, PROWS, PROW_H)
+    local offset = FauxScrollFrame_GetOffset(IBT.profScroll)
+    local i
+    for i = 1, PROWS do
+        local r = IBT.profRows[i]
+        local idx = i + offset
+        if idx <= n then FillProfRow(r, list[idx]); r:Show() else r:Hide() end
+    end
+end
+
+-- ---------------------------------------------------------------------------
 -- tabs
 -- ---------------------------------------------------------------------------
 function IBT.ShowTab(name)
     IBT._tab = name
     if IBT.tabLook then if name == "look" then IBT.tabLook:Show() else IBT.tabLook:Hide() end end
     if IBT.tabSetup then if name == "setup" then IBT.tabSetup:Show() else IBT.tabSetup:Hide() end end
+    if IBT.tabProf then if name == "profiles" then IBT.tabProf:Show() else IBT.tabProf:Hide() end end
     SetActive(IBT.tabLookBtn, name == "look")
     SetActive(IBT.tabSetupBtn, name == "setup")
+    SetActive(IBT.tabProfBtn, name == "profiles")
     if name == "setup" then IBT.RefreshList() end
+    if name == "profiles" then
+        if IBT.SnapshotChar then IBT.SnapshotChar() end -- keep "(this character)" current
+        IBT.RefreshProfiles()
+    end
 end
 
 -- ---------------------------------------------------------------------------
@@ -261,13 +364,16 @@ function IBT.BuildOptions()
     local close = Btn(p, 18, 18, "x", function() p:Hide() end)
     close:SetPoint("TOPRIGHT", p, "TOPRIGHT", -6, -6)
 
-    IBT.tabLookBtn = Btn(p, 120, 20, "Look & Feel", function() IBT.ShowTab("look") end)
+    IBT.tabLookBtn = Btn(p, 116, 20, "Look & Feel", function() IBT.ShowTab("look") end)
     IBT.tabLookBtn:SetPoint("TOPLEFT", p, "TOPLEFT", 14, -26)
-    IBT.tabSetupBtn = Btn(p, 120, 20, "Tray Setup", function() IBT.ShowTab("setup") end)
-    IBT.tabSetupBtn:SetPoint("LEFT", IBT.tabLookBtn, "RIGHT", 6, 0)
+    IBT.tabSetupBtn = Btn(p, 116, 20, "Tray Setup", function() IBT.ShowTab("setup") end)
+    IBT.tabSetupBtn:SetPoint("LEFT", IBT.tabLookBtn, "RIGHT", 5, 0)
+    IBT.tabProfBtn = Btn(p, 116, 20, "Profiles", function() IBT.ShowTab("profiles") end)
+    IBT.tabProfBtn:SetPoint("LEFT", IBT.tabSetupBtn, "RIGHT", 5, 0)
 
     local look = CreateFrame("Frame", nil, p); look:SetAllPoints(p); IBT.tabLook = look
     local setup = CreateFrame("Frame", nil, p); setup:SetAllPoints(p); IBT.tabSetup = setup
+    local prof = CreateFrame("Frame", nil, p); prof:SetAllPoints(p); IBT.tabProf = prof
 
     -- ===================== LOOK & FEEL =====================
     -- LEFT COLUMN: theme + layout, top to bottom
@@ -369,6 +475,36 @@ function IBT.BuildOptions()
     end)
     addBtn:SetPoint("TOPLEFT", listBG, "BOTTOMLEFT", 0, -8)
 
+    -- ===================== PROFILES =====================
+    local pIntro = prof:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    pIntro:SetPoint("TOPLEFT", prof, "TOPLEFT", 14, -54)
+    pIntro:SetWidth(372); pIntro:SetJustifyH("LEFT"); pIntro:SetSpacing(3)
+    pIntro:SetText("Save your setup and load it on your other characters. Each character's " ..
+        "setup saves automatically (in |cffffd200gold|r) so alts can Load it.")
+
+    local pBG = CreateFrame("Frame", nil, prof)
+    pBG:SetPoint("TOPLEFT", prof, "TOPLEFT", 14, -100)
+    pBG:SetWidth(372); pBG:SetHeight(PROWS * PROW_H + 6)
+    Flat(pBG, 0.03, 0.03, 0.03, 0.9)
+
+    local pHolder = CreateFrame("Frame", nil, pBG)
+    pHolder:SetPoint("TOPLEFT", pBG, "TOPLEFT", 6, -4)
+    pHolder:SetWidth(360); pHolder:SetHeight(PROWS * PROW_H)
+
+    IBT.profRows = {}
+    for i = 1, PROWS do IBT.profRows[i] = MakeProfRow(pHolder, i) end
+
+    local pScroll = CreateFrame("ScrollFrame", "IBTProfileScroll", pBG, "FauxScrollFrameTemplate")
+    pScroll:SetPoint("TOPLEFT", pBG, "TOPLEFT", 0, -2)
+    pScroll:SetPoint("BOTTOMRIGHT", pBG, "BOTTOMRIGHT", -24, 2)
+    pScroll:SetScript("OnVerticalScroll", function() FauxScrollFrame_OnVerticalScroll(PROW_H, IBT.RefreshProfiles) end)
+    IBT.profScroll = pScroll
+
+    local saveBtn = Btn(prof, 220, 20, "+ Save current settings as a profile", function()
+        StaticPopup_Show("IBT_SAVEPROFILE")
+    end)
+    saveBtn:SetPoint("TOPLEFT", pBG, "BOTTOMLEFT", 0, -8)
+
     -- footer
     local note = p:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     note:SetPoint("BOTTOMLEFT", p, "BOTTOMLEFT", 14, 12)
@@ -376,7 +512,7 @@ function IBT.BuildOptions()
     local ver = GetAddOnMetadata and GetAddOnMetadata("ImmersiveButtonTray", "Version")
     local vt = p:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     vt:SetPoint("BOTTOMRIGHT", p, "BOTTOMRIGHT", -10, 12)
-    vt:SetText("|cff555555v" .. (ver or "0.1.0") .. "|r")
+    vt:SetText("|cff555555v" .. (ver or "0.2.0") .. "|r")
 
     IBT.ShowTab("look")
 end
